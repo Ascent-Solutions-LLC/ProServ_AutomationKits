@@ -12,7 +12,7 @@ This playbook will deploy the following resources:
 - Microsoft Sentinel API connection for Managed Identity
     
 Required permissions for Managed Identity
-- Sentinel Responder role
+- Sentinel Contributor role
 - User.ReadWrite.All Graph API permissions
 
 ### Deployment of Playbook
