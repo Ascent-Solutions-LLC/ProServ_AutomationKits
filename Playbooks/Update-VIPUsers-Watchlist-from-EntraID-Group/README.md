@@ -16,6 +16,10 @@ This playbook is used to update the Microsoft Sentinel VIP Users watchlist by sy
 
     This group can be created as a standard group or a dynamic group. Standard groups will require new members to be manually added and removed (if user is still active in the org). A dynamic group and automatically add users based on tags or job title. [Dynamic Group Membership](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership)
 
+## Quick Deployment
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Ascent-Solutions-LLC/ProServ_AutomationKits/main/Playbooks/Update-VIPUsers-Watchlist-from-EntraID-Group/VIPUser_Watchlist_Update.json)
+
 ## Post-Deployment
 
 The playbook will require the system-assigned anaged identity to be enabled. The managed identity will require Microsoft Sentinel Contributor role, Log Analytics Reader role which can be assigned in the Identity blade under the Settings tab in the logic app.
