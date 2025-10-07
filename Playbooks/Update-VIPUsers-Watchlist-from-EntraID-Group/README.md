@@ -18,7 +18,7 @@ This playbook is used to update the Microsoft Sentinel VIP Users watchlist by sy
 
 ## Quick Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Ascent-Solutions-LLC/ProServ_AutomationKits/main/Playbooks/Update-VIPUsers-Watchlist-from-EntraID-Group/VIPUser_Watchlist_Update.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fmain%2FPlaybooks%2FUpdate-VIPUsers-Watchlist-from-EntraID-Group%2FVIPUser_Watchlist_Update.json)
 
 ## Post-Deployment
 
