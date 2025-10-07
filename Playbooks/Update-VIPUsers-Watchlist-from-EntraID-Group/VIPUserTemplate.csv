@@ -1,0 +1,2 @@
+User Identifier,User EntraID Object Id,User On-Prem Sid,User Principal Name,Tags
+UUID(Optional),Object ID(Optional),S-1-12-1-4141952679-1282074057-627758481-2916039507(Optional),BillC@soccorp.net(Required),VIP(Optional)
