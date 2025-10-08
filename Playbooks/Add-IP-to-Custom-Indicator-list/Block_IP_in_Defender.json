@@ -1,0 +1,222 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Block-IP-in-Defender (MI only)",
+    "description": "Run from a Microsoft Sentinel Incident. Takes IP entities and blocks them in Defender using the Logic App's Managed Identity. Adds a comment listing blocked IPs.",
+    "prerequisites": "Grant the Logic App's Managed Identity the TI write permission on the WindowsDefenderATP application (e.g., Ti.ReadWrite).",
+    "postDeployment": [
+      "Grant TI write app role to the Logic App managed identity on WindowsDefenderATP",
+      "Assign Microsoft Sentinel Contributor to the Logic App"
+    ],
+    "lastUpdateTime": "2025-10-07T00:00:00Z",
+    "entities": ["Ip"],
+    "tags": ["Microsoft Sentinel", "Incident", "Defender", "Block IP"],
+    "support": { "tier": "partner" },
+    "author": { "name": "Modified for MI-only (IP)" }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "AS-Block-IP-in-Defender",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic App resource to be created"
+      }
+    }
+  },
+  "variables": {
+    "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('azuresentinel')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_IPs": {
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/ip"
+              },
+              "runAfter": {}
+            },
+            "Initialize_variable_-_Blocked_IPs": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Blocked IPs",
+                    "type": "string"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "runAfter": {
+                "Initialize_variable_-_Blocked_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "HTTP_-_Add_Defender_IOC": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "https://api.securitycenter.microsoft.com/api/indicators",
+                    "body": {
+                      "action": "Block",
+                      "description": "Auto-blocked by Sentinel playbook (Managed Identity)",
+                      "indicatorType": "IpAddress",
+                      "indicatorValue": "@items('For_each')?['Address']",
+                      "title": "Block-IP-in-Defender (MI)",
+                      "generateAlert": false
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://api.securitycenter.microsoft.com"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Condition_-_IP_Successfully_Blocked": {
+                  "type": "If",
+                  "runAfter": {
+                    "HTTP_-_Add_Defender_IOC": [ "Succeeded" ]
+                  },
+                  "expression": {
+                    "or": [
+                      { "equals": [ "@outputs('HTTP_-_Add_Defender_IOC')['statusCode']", 200 ] },
+                      { "equals": [ "@outputs('HTTP_-_Add_Defender_IOC')['statusCode']", 201 ] },
+                      { "equals": [ "@outputs('HTTP_-_Add_Defender_IOC')['statusCode']", 202 ] }
+                    ]
+                  },
+                  "actions": {
+                    "Append_to_string_variable": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "Blocked IPs",
+                        "value": "@items('For_each')?['Address']"
+                      },
+                      "runAfter": {}
+                    }
+                  }
+                }
+              }
+            },
+            "Condition_-_One_or_more_IPs_blocked": {
+              "type": "If",
+              "runAfter": {
+                "For_each": [ "Succeeded" ]
+              },
+              "expression": {
+                "and": [
+                  { "greater": [ "@length(variables('Blocked IPs'))", 0 ] }
+                ]
+              },
+              "actions": {
+                "Add_comment_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><strong>Blocked the following IPs in Defender:<br></strong>@{variables('Blocked IPs')}<br></p>"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {}
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "connectionName": "[variables('azuresentinel')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

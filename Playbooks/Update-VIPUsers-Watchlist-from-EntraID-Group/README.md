@@ -8,7 +8,7 @@ This playbook is used to update the Microsoft Sentinel VIP Users watchlist by sy
 
 1) A VIP user watchlist must be deployed for the playbook to target for updates. There is a VIP User watchlist template available in the watchlist deployment tab in sentinel ![alt text](images/watchlistVIPTemplate.png)
 
-    Watchlists can't be deployed empty so a sample csv is available in this repo for use with first deployment. It is recommended that you replace the information with that of an actual user that will be in the VIP group in EntraID to avoid errors. [VIP Watchlist csv template](VIPUserTemplate.csv)
+    Watchlists can't be deployed empty so a sample csv is available in this repo for use with first deployment. It is recommended that you replace the information with that of an actual user that will be in the VIP group in EntraID to avoid errors. [VIP Watchlist csv template](VIP Users.csv)
 
     For information on what is required for the VIP users watchlist, consult this Microsoft documentation: [VIP User watchlist schema](https://learn.microsoft.com/en-us/azure/sentinel/watchlist-schemas#vip-users)
 
