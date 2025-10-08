@@ -8,7 +8,7 @@ This playbook is used to update the Microsoft Sentinel VIP Users watchlist by sy
 
 1) A VIP user watchlist must be deployed for the playbook to target for updates. There is a VIP User watchlist template available in the watchlist deployment tab in sentinel ![alt text](images/watchlistVIPTemplate.png)
 
-    Watchlists can't be deployed empty so a sample csv is available in this repo for use with first deployment. It is recommended that you replace the information with that of an actual user that will be in the VIP group in EntraID to avoid errors. [VIP Watchlist csv template](VIP Users.csv)
+    Watchlists can't be deployed empty so a sample csv is available in this repo for use with first deployment. It is recommended that you replace the information with that of an actual user that will be in the VIP group in EntraID to avoid errors. [VIP Watchlist csv template](VIP User.csv)
 
     For information on what is required for the VIP users watchlist, consult this Microsoft documentation: [VIP User watchlist schema](https://learn.microsoft.com/en-us/azure/sentinel/watchlist-schemas#vip-users)
 
@@ -80,3 +80,21 @@ $AppRole8 = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $Permis
 New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
 -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole8.Id
 ```
+
+Finally, the connections for the two "Run query and list results" actions will need to be changed to connect via the managed identity. Enter the Logic App Designer from the left blade under Development Tools.
+![alt text](images/LAWMIDconnection01.png)
+
+Find the two 'Run query and list results' actions, one is embedded in the 'For each member of VIP EntraID group' action and the other below the for each loop.
+![alt text](images/LAWMIDconnections02.png)
+
+Select the action and at the bottom, select 'Change Connection'
+![alt text](images/LAWMIDconnection03.png)
+
+In the Change connection window, scroll to bottom and select 'Add new'
+![alt text](images/LAWMIDconnection04.png)
+
+Select the drop down menu for 'Authentication Type' and select Logic Apps Managed Identity. Name your connection and select create new.
+![alt text](images/LAWMIDconnection05.png)
+![alt text](images/LAWMIDconnection06.png)
+
+Select the second 'Run query and list results' action and select 'Change connection' again. This time, however, select the new connection you created in the other action. This will allow your managed Identity to perform the query action in the Log Analytics Workspace.

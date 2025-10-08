@@ -31,7 +31,7 @@
                 "description": "ID of the Log Analytics Workspace on which Microsoft Sentinel is deployed."
             }
         },
-        "Azure AD Group ID": {
+        "EntraID Group ID": {
             "defaultValue": "EntraID Group ID",
             "type": "string",
             "metadata": {
@@ -158,7 +158,7 @@
                         "For_each_VIP_Watchlist_member": {
                             "foreach": "@body('Run_query_and_list_results_-_Get_VIP_Watchlist_members')?['value']",
                             "actions": {
-                                "Condition_-_if_user_is_not_in_Azure_AD_VIP_group": {
+                                "Condition_-_if_user_is_not_in_EntraID_VIP_group": {
                                     "actions": {
                                         "Watchlists_-_Delete_a_watchlist_item": {
                                             "runAfter": {},
@@ -175,7 +175,7 @@
                                         }
                                     },
                                     "runAfter": {
-                                        "HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group": [
+                                        "HTTP_-_check_is_the_Watchlist_user_still_member_of_EntraID_group": [
                                             "Succeeded",
                                             "Failed"
                                         ]
@@ -184,7 +184,7 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@empty(body('HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group')?['value'])",
+                                                    "@empty(body('HTTP_-_check_is_the_Watchlist_user_still_member_of_EntraID_group')?['value'])",
                                                     "@true"
                                                 ]
                                             }
@@ -192,7 +192,7 @@
                                     },
                                     "type": "If"
                                 },
-                                "HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group": {
+                                "HTTP_-_check_is_the_Watchlist_user_still_member_of_EntraID_group": {
                                     "runAfter": {},
                                     "type": "Http",
                                     "inputs": {
@@ -213,8 +213,8 @@
                             },
                             "type": "Foreach"
                         },
-                        "For_each_member_of_VIP_Azure_AD_group": {
-                            "foreach": "@body('Parse_JSON_-_Get_VIP_Azure_AD_Group_Members')?['value']",
+                        "For_each_member_of_VIP_EntraID_group": {
+                            "foreach": "@body('Parse_JSON_-_Get_VIP_EntraID_Group_Members')?['value']",
                             "actions": {
                                 "Condition_-_member_not_in_VIP_Watchlist": {
                                     "actions": {
@@ -226,10 +226,10 @@
                                                     "inputs": {
                                                         "body": {
                                                             "Tags": "",
-                                                            "User AAD Object Id": "@{items('For_each_member_of_VIP_Azure_AD_group')?['id']}",
+                                                            "User AAD Object Id": "@{items('For_each_member_of_VIP_EntraID_group')?['id']}",
                                                             "User Identifier": "",
                                                             "User On-Prem Sid": "@{body('HTTP_-_does_user_have_SID')['onPremisesSecurityIdentifier']}",
-                                                            "User Principal Name": "@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}"
+                                                            "User Principal Name": "@{items('For_each_member_of_VIP_EntraID_group')?['userPrincipalName']}"
                                                         },
                                                         "host": {
                                                             "connection": {
@@ -254,10 +254,10 @@
                                                         "inputs": {
                                                             "body": {
                                                                 "Tags": "",
-                                                                "User AAD Object Id": "@{items('For_each_member_of_VIP_Azure_AD_group')?['id']}",
+                                                                "User AAD Object Id": "@{items('For_each_member_of_VIP_EntraID_group')?['id']}",
                                                                 "User Identifier": "",
                                                                 "User On-Prem Sid": "",
-                                                                "User Principal Name": "@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}"
+                                                                "User Principal Name": "@{items('For_each_member_of_VIP_EntraID_group')?['userPrincipalName']}"
                                                             },
                                                             "host": {
                                                                 "connection": {
@@ -293,7 +293,7 @@
                                                     "type": "ManagedServiceIdentity"
                                                 },
                                                 "method": "GET",
-                                                "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}?$select=onPremisesSecurityIdentifier"
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each_member_of_VIP_EntraID_group')?['userPrincipalName']}?$select=onPremisesSecurityIdentifier"
                                             }
                                         }
                                     },
@@ -318,7 +318,7 @@
                                     "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
-                                        "body": "_GetWatchlist('VIPUsers')\n| where [\"User Principal Name\"] == \"@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}\"",
+                                        "body": "_GetWatchlist('VIPUsers')\n| where [\"User Principal Name\"] == \"@{items('For_each_member_of_VIP_EntraID_group')?['userPrincipalName']}\"",
                                         "host": {
                                             "connection": {
                                                 "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -337,7 +337,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Parse_JSON_-_Get_VIP_Azure_AD_Group_Members": [
+                                "Parse_JSON_-_Get_VIP_EntraID_Group_Members": [
                                     "Succeeded"
                                 ]
                             },
@@ -359,7 +359,7 @@
                                 "uri": "https://graph.microsoft.com/v1.0/groups/@{variables('VIP Group ID')}"
                             }
                         },
-                        "HTTP_-_Get_VIP_Azure_AD_Group_Members": {
+                        "HTTP_-_Get_VIP_EntraID_Group_Members": {
                             "runAfter": {
                                 "HTTP_-_Get_Group_details": [
                                     "Succeeded"
@@ -383,20 +383,20 @@
                                     {
                                         "name": "VIP Group ID",
                                         "type": "string",
-                                        "value": "[parameters('Azure AD Group ID')]"
+                                        "value": "[parameters('EntraID Group ID')]"
                                     }
                                 ]
                             }
                         },
-                        "Parse_JSON_-_Get_VIP_Azure_AD_Group_Members": {
+                        "Parse_JSON_-_Get_VIP_EntraID_Group_Members": {
                             "runAfter": {
-                                "HTTP_-_Get_VIP_Azure_AD_Group_Members": [
+                                "HTTP_-_Get_VIP_EntraID_Group_Members": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ParseJson",
                             "inputs": {
-                                "content": "@body('HTTP_-_Get_VIP_Azure_AD_Group_Members')",
+                                "content": "@body('HTTP_-_Get_VIP_EntraID_Group_Members')",
                                 "schema": {
                                     "properties": {
                                         "@@odata.context": {
@@ -427,7 +427,7 @@
                         },
                         "Run_query_and_list_results_-_Get_VIP_Watchlist_members": {
                             "runAfter": {
-                                "For_each_member_of_VIP_Azure_AD_group": [
+                                "For_each_member_of_VIP_EntraID_group": [
                                     "Succeeded"
                                 ]
                             },

@@ -10,8 +10,20 @@ An admin with Privilege Role Admin or Global Admin will be needed to assign the 
 
 ## Quick Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fmain%2FPlaybooks%2FAdd-IP-to-Custom-Indicator-list%2FBlock_IP_in_Defender.json)
 
+## Post Deployment
+
+Once the playbook has been successfully deployed, navigate to the managed identity. This can be located in the Identity tab under Settings on the left blade. Make sure the System-Assignmed managed identity is enabled, this should be the case by default.
+![alt text](images/MID_settings_01.png)
+
+1) Copy the Managed Identity's Object ID, this will be needed for assigning API privileges
+![alt text](images/MID_settings_objectID.png)
+2) Select the Azure Role Assignement button and assign the Microsoft Sentinel
+Responder role to the MID
+![alt text](images/MID_settings_AzureRoleAssignment.png)
+![alt text](images/MID_settings_addroleassignment.png)
+3) Open an Azure CLI cloud shell and run the following script. Be sure to replafce the managed identity object id placeholder with the object ID copied from earlier.
 
 ```powershell
 # Replace with your managed identity's Object ID
