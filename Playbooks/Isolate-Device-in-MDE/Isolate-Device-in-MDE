@@ -1,0 +1,202 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Isolate-Device-in-MDE",
+      "metadata": { "description": "Logic App (playbook) name." }
+    },
+    "managedApiLocation": {
+      "type": "string",
+      "defaultValue": "eastus",
+      "allowedValues": [ "eastus", "eastus2", "westeurope", "westus" ],
+      "metadata": { "description": "Region where the azuresentinel/wdatp managed APIs exist." }
+    }
+  },
+  "variables": {
+    "rgLocation": "[resourceGroup().location]",
+    "azuresentinelConnName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "wdatpConnName": "[concat('wdatp-', parameters('PlaybookName'))]",
+    "azuresentinelManagedApiId": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/azuresentinel', subscription().subscriptionId, parameters('managedApiLocation'))]",
+    "wdatpManagedApiId": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/wdatp', subscription().subscriptionId, parameters('managedApiLocation'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('azuresentinelConnName')]",
+      "location": "[parameters('managedApiLocation')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "alternativeParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[variables('azuresentinelManagedApiId')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('wdatpConnName')]",
+      "location": "[parameters('managedApiLocation')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "alternativeParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[variables('wdatpManagedApiId')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[variables('rgLocation')]",
+      "identity": { "type": "SystemAssigned" },
+      "tags": { "LogicAppsCategory": "security" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('wdatpConnName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "type": "Object", "defaultValue": {} }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": {
+                  "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_Hosts": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/host"
+              },
+              "runAfter": {}
+            },
+            "Initialize_variable_-_Affected_Hosts": {
+              "type": "InitializeVariable",
+              "runAfter": { "Entities_-_Get_Hosts": [ "Succeeded" ] },
+              "inputs": {
+                "variables": [ { "name": "Affected Hosts", "type": "string" } ]
+              }
+            },
+            "For_each_-_Host": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+              "runAfter": { "Initialize_variable_-_Affected_Hosts": [ "Succeeded" ] },
+              "actions": {
+                "Condition_-_Check_for_MDE_Device_ID": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      { "not": { "equals": [ "@items('For_each_-_Host')?['additionalData']?['MdatpDeviceId']", "" ] } }
+                    ]
+                  },
+                  "actions": {
+                    "Actions_-_Isolate_machine": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['wdatp']['connectionId']" } },
+                        "method": "post",
+                        "path": "/api/machines/@{encodeURIComponent(items('For_each_-_Host')?['additionalData']?['MdatpDeviceId'])}/isolate",
+                        "body": {
+                          "Comment": "Isolated by playbook from Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                          "IsolationType": "Full"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Append_to_string_variable_-_Machine_Isolated": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "Affected Hosts",
+                        "value": "Successfully isolated @{items('For_each_-_Host')?['HostName']} in MDE\n"
+                      },
+                      "runAfter": { "Actions_-_Isolate_machine": [ "Succeeded" ] }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Append_to_string_variable_-_Unable_to_Isolate_Machine": {
+                        "type": "AppendToStringVariable",
+                        "inputs": {
+                          "name": "Affected Hosts",
+                          "value": "No MDE Device ID was found for @{items('For_each_-_Host')?['HostName']}\n"
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Add_comment_to_incident_(V3)": {
+              "type": "ApiConnection",
+              "runAfter": { "For_each_-_Host": [ "Succeeded" ] },
+              "inputs": {
+                "method": "post",
+                "path": "/Incidents/Comment",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p>@{variables('Affected Hosts')}</p>"
+                },
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "id": "[variables('azuresentinelManagedApiId')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnName'))]",
+                "connectionName": "[variables('azuresentinelConnName')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "wdatp": {
+                "id": "[variables('wdatpManagedApiId')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('wdatpConnName'))]",
+                "connectionName": "[variables('wdatpConnName')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "workflowName": { "type": "string", "value": "[parameters('PlaybookName')]" },
+    "azuresentinelConnectionName": { "type": "string", "value": "[variables('azuresentinelConnName')]" },
+    "wdatpConnectionName": { "type": "string", "value": "[variables('wdatpConnName')]" }
+  }
+}
