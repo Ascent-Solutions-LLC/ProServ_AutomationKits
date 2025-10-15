@@ -1,0 +1,243 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "servicePrefix": { "type": "string", "defaultValue": "" },
+    "createdBy": { "type": "string", "defaultValue": "Anonymous" },
+    "resourceGroup": { "type": "string", "defaultValue": "[resourceGroup().name]" },
+    "location": { "type": "string", "defaultValue": "[resourceGroup().location]" },
+    "deploymentTimestamp": { "type": "string", "defaultValue": "[utcNow()]" },
+    "workspaceName": { "type": "string" },
+    "workspaceId": { "type": "string" }
+  },
+  "variables": {
+    "LogicAppname": "[if(equals(parameters('servicePrefix'), ''), 'VIP-Incident-Update', concat(parameters('servicePrefix'), '-VIP-Incident-Update'))]",
+    "connSentinelName": "[variables('LogicAppname')]",
+    "connAzMonName": "azuremonitorlogs-1",
+    "year": "[substring(parameters('deploymentTimestamp'), 0, 4)]",
+    "month": "[substring(parameters('deploymentTimestamp'), 4, 2)]",
+    "day": "[substring(parameters('deploymentTimestamp'), 6, 2)]",
+    "formattedDate": "[concat(variables('day'), '.', variables('month'), '.', variables('year'))]",
+    "apiId_sentinel": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+    "apiId_azmon": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuremonitorlogs')]",
+    "connSentinelId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('resourceGroup'), '/providers/Microsoft.Web/connections/', variables('connSentinelName'))]",
+    "connAzMonId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('resourceGroup'), '/providers/Microsoft.Web/connections/', variables('connAzMonName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('LogicAppname')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "Playbook": "[variables('LogicAppname')]",
+        "createdBy": "[parameters('createdBy')]",
+        "createdOn": "[variables('formattedDate')]"
+      },
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('LogicAppname')]",
+        "statuses": [ { "status": "Ready" } ],
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "name": "azuresentinel",
+          "displayName": "Microsoft Sentinel",
+          "description": "Cloud-native SIEM with a built-in AI so you can focus on what matters most",
+          "iconUri": "https://connectoricons-prod.azureedge.net/releases/v1.0.1718/1.0.1718.3951/azuresentinel/icon.png",
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+          "type": "Microsoft.Web/locations/managedApis"
+        },
+        "testLinks": []
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('connAzMonName')]",
+      "location": "[parameters('location')]",
+      "kind": "V1",
+      "tags": {
+        "Playbook": "[variables('LogicAppname')]",
+        "createdBy": "[parameters('createdBy')]",
+        "createdOn": "[variables('formattedDate')]"
+      },
+      "properties": {
+        "displayName": "[variables('connAzMonName')]",
+        "api": {
+          "name": "azuremonitorlogs",
+          "displayName": "Azure Monitor Logs",
+          "id": "[variables('apiId_azmon')]",
+          "type": "Microsoft.Web/locations/managedApis"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[variables('LogicAppname')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('connSentinelName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('connAzMonName'))]"
+      ],
+      "tags": {
+        "Playbook": "[variables('LogicAppname')]",
+        "createdBy": "[parameters('createdBy')]",
+        "createdOn": "[variables('formattedDate')]"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "workspaceName": { "type": "String", "defaultValue": "[parameters('workspaceName')]" },
+            "workspaceId": { "type": "String", "defaultValue": "[parameters('workspaceId')]" },
+            "$connections": { "type": "Object", "defaultValue": {} }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_Accounts": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/account"
+              },
+              "runAfter": {}
+            },
+            "Parse_JSON": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "accountName": { "type": "string" },
+                      "upnSuffix": { "type": "string" },
+                      "aadTenantId": { "type": "string" },
+                      "aadUserId": { "type": "string" },
+                      "isDomainJoined": { "type": "boolean" },
+                      "displayName": { "type": "string" },
+                      "additionalData": {
+                        "type": "object",
+                        "properties": {
+                          "Sources": { "type": "string" },
+                          "GivenName": { "type": "string" },
+                          "IsDeleted": { "type": "string" },
+                          "IsEnabled": { "type": "string" },
+                          "JobTitle": { "type": "string" },
+                          "Surname": { "type": "string" },
+                          "UserType": { "type": "string" },
+                          "UpnName": { "type": "string" },
+                          "SyncFromAad": { "type": "string" }
+                        }
+                      },
+                      "friendlyName": { "type": "string" },
+                      "Type": { "type": "string" },
+                      "Name": { "type": "string" }
+                    },
+                    "required": [
+                      "accountName","upnSuffix","aadTenantId","aadUserId","isDomainJoined",
+                      "displayName","additionalData","friendlyName","Type","Name"
+                    ]
+                  }
+                }
+              },
+              "runAfter": { "Entities_-_Get_Accounts": [ "Succeeded" ] }
+            },
+            "Run_query_and_list_results": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['azuremonitorlogs-1']['connectionId']" } },
+                "method": "post",
+                "body": "_GetWatchlist('VIPUsers')\n| distinct [\"User Principal Name\"]",
+                "path": "/queryData",
+                "queries": {
+                  "subscriptions": "@{split(parameters('workspaceId'), '/')[2]}",
+                  "resourcegroups": "@{split(parameters('workspaceId'), '/')[4]}",
+                  "resourcetype": "Log Analytics Workspace",
+                  "resourcename": "@{parameters('workspaceName')}",
+                  "timerange": "Last 12 hours"
+                }
+              },
+              "runAfter": { "Parse_JSON": [ "Succeeded" ] }
+            },
+            "For_each": {
+              "type": "Foreach",
+              "foreach": "@body('Run_query_and_list_results')?['value']",
+              "actions": {
+                "Filter_array": {
+                  "type": "Query",
+                  "inputs": {
+                    "from": "@body('Parse_JSON')",
+                    "where": "@equals(item()?['additionalData']?['UpnName'], items('For_each')?['User Principal Name'])"
+                  }
+                },
+                "Condition": {
+                  "type": "If",
+                  "expression": { "and": [ { "greater": [ "@length(body('Filter_array'))", 0 ] } ] },
+                  "actions": {
+                    "Update_incident": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                        "method": "put",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "tagsToAdd": { "TagsToAdd": [ { "Tag": "VIP" } ] },
+                          "severity": "High"
+                        },
+                        "path": "/Incidents"
+                      }
+                    }
+                  },
+                  "else": { "actions": {} },
+                  "runAfter": { "Filter_array": [ "Succeeded" ] }
+                }
+              },
+              "runAfter": { "Run_query_and_list_results": [ "Succeeded" ] }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "id": "[variables('apiId_sentinel')]",
+                "connectionId": "[variables('connSentinelId')]",
+                "connectionName": "[variables('connSentinelName')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
+              "azuremonitorlogs-1": {
+                "id": "[variables('apiId_azmon')]",
+                "connectionId": "[variables('connAzMonId')]",
+                "connectionName": "[variables('connAzMonName')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "workflowId": { "type": "string", "value": "[resourceId('Microsoft.Logic/workflows', variables('LogicAppname'))]" }
+  }
+}
