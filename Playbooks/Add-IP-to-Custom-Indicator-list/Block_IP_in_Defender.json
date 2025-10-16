@@ -17,7 +17,7 @@
   },
   "parameters": {
     "PlaybookName": {
-      "defaultValue": "AS-Block-IP-in-Defender",
+      "defaultValue": "Block-IP-in-Defender",
       "type": "string",
       "metadata": {
         "description": "Name of the Logic App resource to be created"

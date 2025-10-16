@@ -4,7 +4,7 @@
 
 This playbook is designed to take IP entities from a Sentinel Incident and add them to the IOC endpoint block list in Microsoft Defender. The block is set to not create an alert by default and is set to not expire. These properties can be changed in the Defender portal once the block has been create. Default settings can be changed in the playbook by adjusting the HTTP post action.
 
-## Prequisites
+## Prerequisites
 
 An admin with Privilege Role Admin or Global Admin will be needed to assign the necessary MDE API permissions to the Managed Identity.
 
