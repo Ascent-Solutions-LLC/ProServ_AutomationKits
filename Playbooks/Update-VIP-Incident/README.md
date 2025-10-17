@@ -14,7 +14,7 @@ A user with Owner over the Subscription or Resource Group where the playbook is 
 
 ## Quick Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fblob%2Fmain%2FPlaybooks%2FUpdate-VIP-Incident%2FIncident-Contains-VIP-Update.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fblob%2Fmain%2FPlaybooks%2FUpdate-VIP-Incident%2FIncident-Contains-VIP-Update.json)
 
 ## Post Deployment
 
