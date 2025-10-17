@@ -10,7 +10,7 @@ MDE API permissions are going to require a user with Global Admin (GA) or Privil
 
 ## Quick Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fblob%2Fmain%2FPlaybooks%2FIsolate-Device-in-MDE%2FIsolate-Device-in-MDE)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAscent-Solutions-LLC%2FProServ_AutomationKits%2Fmain%2FPlaybooks%2Isolate-Device-in-MDE%2FIsolate-Device-in-MDE)
 
 Deployment will require the choice of API deployment region. By default the parameter is set to EastUS. You can adjust the parameter depending on needs. Verify the closest region that the API is hosted for your needs.
 
